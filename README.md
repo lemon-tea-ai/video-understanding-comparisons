@@ -1,13 +1,13 @@
 # Video Understanding Comparisons
 
-Compare video understanding capabilities across different Gemini models. Upload a video, enter a prompt, and see how Gemini 2.5 Pro, 2.5 Flash, 2.0 Flash, and 2.0 Pro each interpret the video content.
+Compare video understanding capabilities across different Gemini models. Upload a video, enter a prompt, and see how Gemini 3 Pro Preview, 3 Flash Preview, 2.5 Pro, and 2.5 Flash each interpret the video content.
 
 ## Features
 
 - **Video Upload**: Upload any video file for analysis
 - **Custom Prompts**: Enter your own video understanding prompts
 - **Multi-Model Comparison**: Runs your prompt through 4 Gemini models in parallel
-- **AI Evaluation**: Uses Gemini 2.0 Pro to score and evaluate each model's response
+- **AI Evaluation**: Uses Gemini 3 Pro Preview to score and evaluate each model's response
 - **Detailed Analysis**: View strengths, weaknesses, and reasoning for each model
 
 ## Architecture
@@ -21,11 +21,11 @@ Compare video understanding capabilities across different Gemini models. Upload 
                                  │
                     ┌────────────┼────────────┐
                     │            │            │
-                    ▼            ▼            ▼
-              ┌─────────┐  ┌─────────┐  ┌─────────┐
-              │Gemini   │  │Gemini   │  │Gemini   │
-              │2.5 Pro  │  │2.5 Flash│  │2.0 Pro  │
-              └─────────┘  └─────────┘  └─────────┘
+                    ▼            ▼            ▼            ▼
+              ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐
+              │Gemini   │  │Gemini   │  │Gemini   │  │Gemini   │
+              │3 Pro    │  │3 Flash  │  │2.5 Pro  │  │2.5 Flash│
+              └─────────┘  └─────────┘  └─────────┘  └─────────┘
 ```
 
 ## Setup
@@ -82,7 +82,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 1. **Upload a Video**: Click "Upload Video" and select a video file
 2. **Enter a Prompt**: Type your video understanding question or use a suggested prompt
 3. **Compare Models**: Click "Compare All Models" to run the analysis
-4. **Review Results**: Each model's response is scored and evaluated by Gemini 2.0 Pro
+4. **Review Results**: Each model's response is scored and evaluated by Gemini 3 Pro Preview
 5. **Expand Details**: Click on any model card to see the full response, strengths, and weaknesses
 
 ## Models Compared
@@ -91,8 +91,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 |-------|-------------|
 | **Gemini 3 Pro Preview** | Latest pro model (also used for final evaluation) |
 | **Gemini 3 Flash Preview** | Latest flash model with fast inference |
-| **Gemini 2.5 Pro** | Previous generation pro model |
-| **Gemini 2.5 Flash** | Previous generation flash model |
+| **Gemini 2.5 Pro** | Second generation pro model |
+| **Gemini 2.5 Flash** | Second generation flash model |
 
 ## API Endpoints
 

@@ -150,11 +150,17 @@ Here are the responses from different AI models:
         else:
             eval_prompt += f"### {result.model_name}\n{result.response}\n\n"
     
-    eval_prompt += """Please evaluate each model's response based on:
-1. Accuracy and relevance to the question
-2. Level of detail and comprehensiveness
-3. Clarity and organization
-4. Specific observations from the video
+    eval_prompt += """Evaluate each model's response based on how well it addresses the user's specific question. Consider:
+
+1. **Relevance & Accuracy**: Does it directly answer what was asked? Are details correct?
+2. **Completeness**: Is the analysis thorough and comprehensive for the question type?
+3. **Specificity**: Are examples, observations, and recommendations concrete and actionable?
+4. **Timestamps**: If requested, are they accurate, well-formatted, and appropriately detailed?
+5. **Technical Insight**: For specialized prompts (editing, audio, color, etc), does it demonstrate domain expertise?
+6. **Actionability**: Are suggestions practical and implementable with clear guidance?
+7. **Organization**: Is information well-structured and easy to follow?
+
+Weight criteria based on the prompt's focus (e.g., prioritize timestamp accuracy for temporal analysis, actionability for editing suggestions, technical accuracy for production reviews).
 
 Provide your evaluation in the following JSON format:
 {

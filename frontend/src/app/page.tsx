@@ -17,6 +17,7 @@ import {
   Loader2,
   Zap,
   Brain,
+  X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -51,15 +52,29 @@ interface CompareResponse {
   overall_summary: string | null
 }
 
+interface BatchCompareResponse {
+  comparisons: CompareResponse[]
+  total_videos: number
+  total_prompts: number
+  total_combinations: number
+}
+
+interface UploadedVideo {
+  id: string
+  file: File
+  url: string
+}
+
 const suggestedPrompts = [
   "Please provide a detailed second-by-second analysis of this video capturing both visual and audio elements with precise timestamps. For visuals, describe the camera work including angles, movements, and framing choices. Detail all subjects in frame noting their appearance, clothing, positioning, facial expressions, body language, and actions. Describe the environment including setting, background elements, lighting conditions, and atmospheric effects. Note the visual style including color grading, text overlays with exact wording, transitions between scenes, special effects, and focus changes. For audio, transcribe all dialogue exactly with speaker identification, tone, and delivery style. Identify all sound effects including ambient sounds, foley, and impacts with their timing relative to visual actions. Describe any music including genre, instrumentation, tempo, mood, and volume changes. Note audio technical elements like spatial positioning and effects. Use timestamps in MM:SS format. Structure your response chronologically with each time segment covering visual description, audio description, and notable elements. Include overall analysis of narrative arc, how visual cuts align with audio beats, emotional progression throughout, technical production quality, and the apparent purpose or context of the video. Be exhaustive and specific in capturing every detail.",
   "Analyze this video from a professional video editing perspective. Identify the best hook or opening moment that would grab viewer attention. Mark timestamps where the video could be trimmed to create highlight reels or shorter versions. Identify and timestamp all filler words, awkward pauses, repeated takes, or redundant content that should be cut. Note any sections with dead air or low energy that could be removed. Highlight the most engaging moments that should be preserved. Suggest B-roll opportunities or cutaway points. Identify transitions that work well and those that could be improved. Note any pacing issues - sections that drag or feel rushed. Recommend an optimal runtime and structure for maximum engagement. Provide specific trim suggestions with in/out points (MM:SS format) for creating a polished final cut.",
-  "Analyze the audio quality and mixing in this video. Identify timestamps where audio levels are inconsistent, too loud, or too quiet. Note any background noise, echo, or audio artifacts that need cleanup. Evaluate dialogue clarity and intelligibility. Identify sections where music overpowers speech or vice versa. Note any audio-visual sync issues. Suggest where sound effects should be added or enhanced. Evaluate the overall audio balance and recommend mixing adjustments with specific timestamps (MM:SS format). Identify moments where audio transitions are jarring or could be smoother.",
-  "Review all text, captions, and graphics in this video. Transcribe every text element with exact wording and timestamps (MM:SS format). Evaluate caption timing - note if they appear too early, too late, or stay on screen too long/short. Assess readability including font size, color contrast, and placement. Identify any typos or grammatical errors. Note if text overlays obstruct important visual elements. Suggest improvements for text animation timing and style. Evaluate lower thirds, titles, and end screens. Recommend where additional captions or text overlays would enhance understanding.",
-  "Analyze transitions and pacing throughout this video. Identify every transition with timestamp and type (cut, dissolve, wipe, etc). Evaluate if transitions match the video's mood and style. Note transitions that feel too abrupt or too slow. Identify the rhythm and pacing - mark sections that feel well-paced versus those that drag or feel rushed. Suggest where different transition types would be more effective. Evaluate the overall flow and recommend re-timing or restructuring with specific timestamps (MM:SS format). Note how scene changes align with audio or narrative beats.",
-  "Evaluate color grading, visual style, and production quality. Describe the overall color palette and mood. Identify any color inconsistencies between shots or scenes with timestamps. Note exposure issues - sections that are overexposed, underexposed, or have incorrect white balance. Evaluate image sharpness and focus. Identify any visual artifacts, compression issues, or quality problems. Assess the consistency of the visual style throughout. Suggest color correction or grading adjustments for specific sections (MM:SS format). Recommend ways to improve visual consistency and polish.",
-  "Identify B-roll opportunities and suggest supplementary footage. Mark every moment where B-roll is currently used or could be added with timestamps (MM:SS format). For talking head or interview sections, suggest what B-roll footage would enhance the story. Identify moments where the current shot feels static or repetitive and needs cutaway options. Suggest creative visual alternatives to maintain viewer engagement. Note sections where existing B-roll doesn't match or support what's being said. Recommend the duration and placement of B-roll inserts for optimal pacing.",
-  "Analyze this video for thumbnail potential and key frames. Identify the 3-5 best moments that would make compelling thumbnails with timestamps (MM:SS format). Note frames with strong facial expressions, interesting composition, or visual impact. Evaluate each potential thumbnail for clarity, emotional appeal, and click-worthiness. Suggest any text overlays or graphic elements that would enhance thumbnails. Identify frames to avoid due to awkward expressions, motion blur, or poor composition. Consider the video's hook and ensure suggested thumbnails accurately represent the content.",
+  "Provide precise trimming recommendations for this video. Identify the strongest opening hook with exact in-point timestamp (MM:SS format). Mark all sections to cut including filler words (um, uh, like), awkward pauses over 2 seconds, repeated content, and low-value segments with exact in/out points. Suggest trim points that maintain natural speech rhythm and avoid jarring cuts. Recommend where to trim for different video lengths: full version, 60-second cut, 30-second cut, and 15-second highlight. Identify the most quotable or shareable moments worth isolating. Suggest which segments could be rearranged for better flow. Provide frame-accurate cut points that respect word boundaries and breathing room. Recommend optimal ending point that leaves viewers satisfied.",
+  "Provide audio improvement suggestions for this video. Identify timestamps where audio levels should be adjusted (too loud/quiet), recommend compression or normalization settings. Suggest noise reduction for background noise, echo, or artifacts with specific timestamps (MM:SS format). Propose fixes for dialogue clarity issues. Recommend volume adjustments where music overpowers speech or vice versa. Identify audio-visual sync issues and suggest corrections. Propose where to add or enhance sound effects for better impact. Suggest improvements for audio transitions to make them smoother. Recommend overall mixing adjustments to achieve professional audio balance.",
+  "Provide text and caption optimization suggestions for this video. List where captions should be added, removed, or retimed with timestamps (MM:SS format). Suggest optimal caption duration for each text element. Recommend font size, color, and placement improvements for better readability. Propose fixes for any typos or grammatical errors. Suggest repositioning text overlays that obstruct important visuals. Recommend animation timing and style improvements for text elements. Provide suggestions for enhancing lower thirds, titles, and end screens. Propose additional text overlays or graphics that would improve viewer understanding and engagement.",
+  "Provide transition and pacing improvement suggestions for this video. Recommend which transitions should be changed and to what type (cut, dissolve, wipe, etc) with timestamps (MM:SS format). Suggest where cuts should be tightened or lengthened for better flow. Identify sections that need re-pacing - recommend speeding up slow sections or adding breathing room to rushed parts. Propose alternative transition styles that better match the mood. Suggest restructuring or reordering segments for better narrative flow. Recommend where to add or remove beats to improve rhythm. Provide specific timing adjustments to align scene changes with audio beats.",
+  "Provide color grading and visual enhancement suggestions for this video. Recommend color correction adjustments for specific scenes with timestamps (MM:SS format). Suggest fixes for exposure issues - propose settings for overexposed or underexposed sections. Recommend white balance corrections. Suggest color grading to enhance mood and create visual consistency. Propose sharpening or softening adjustments for better image quality. Recommend fixes for visual artifacts or compression issues. Suggest ways to create a cohesive visual style throughout. Provide specific LUT or color adjustment recommendations for achieving professional polish.",
+  "Provide B-roll and supplementary footage suggestions for this video. Recommend specific B-roll shots to add at each timestamp (MM:SS format) with detailed descriptions of what footage would work best. Suggest creative visual alternatives for static or repetitive sections. Propose cutaway options to maintain viewer engagement. Recommend types of supplementary footage that would enhance the story for talking head sections. Suggest replacement footage for existing B-roll that doesn't match the narrative. Provide duration recommendations for each B-roll insert. Propose creative visual solutions to improve pacing and storytelling.",
+  "Provide thumbnail creation and optimization suggestions for this video. Recommend the 3-5 best frames for thumbnails with specific timestamps (MM:SS format) and explain why each would be effective. Suggest crops, zooms, or framing adjustments to enhance thumbnail impact. Recommend text overlays with specific wording and placement. Suggest color adjustments or filters to increase visual appeal and click-worthiness. Propose graphic elements or effects to add. Recommend which facial expressions or moments to feature. Suggest ways to ensure thumbnails accurately represent content while maximizing engagement. Provide A/B testing alternatives for different audience segments.",
 ]
 
 const AVAILABLE_MODELS = [
@@ -73,6 +88,12 @@ export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoId, setVideoId] = useState<string | null>(null)
+  
+  // Batch mode state
+  const [uploadedVideos, setUploadedVideos] = useState<UploadedVideo[]>([])
+  const [selectedPrompts, setSelectedPrompts] = useState<Set<string>>(new Set())
+  const [isBatchMode, setIsBatchMode] = useState(false)
+  
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -80,6 +101,7 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false)
   const [isComparing, setIsComparing] = useState(false)
   const [compareResult, setCompareResult] = useState<CompareResponse | null>(null)
+  const [batchResult, setBatchResult] = useState<BatchCompareResponse | null>(null)
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [selectedModels, setSelectedModels] = useState<Set<string>>(
@@ -130,45 +152,170 @@ export default function Home() {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-    // Clean up old URL
-    if (videoUrl) {
-      URL.revokeObjectURL(videoUrl)
-    }
-
-    setVideoFile(file)
-    setVideoUrl(URL.createObjectURL(file))
-    setCurrentTime(0)
-    setDuration(0)
-    setIsPlaying(false)
-    setError(null)
-    setCompareResult(null)
-    setVideoId(null)
-
-    // Upload to backend
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('http://localhost:8000/api/video/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to upload video')
+    if (isBatchMode) {
+      // Handle multiple file upload for batch mode
+      await handleBatchFileUpload(files)
+    } else {
+      // Handle single file upload
+      const file = files[0]
+      
+      // Clean up old URL
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl)
       }
 
-      const data: VideoMetadata = await response.json()
-      setVideoId(data.id)
+      setVideoFile(file)
+      setVideoUrl(URL.createObjectURL(file))
+      setCurrentTime(0)
+      setDuration(0)
+      setIsPlaying(false)
+      setError(null)
+      setCompareResult(null)
+      setBatchResult(null)
+      setVideoId(null)
+
+      // Upload to backend
+      setIsUploading(true)
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('http://localhost:8000/api/video/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to upload video')
+        }
+
+        const data: VideoMetadata = await response.json()
+        setVideoId(data.id)
+      } catch (err) {
+        setError('Failed to upload video. Make sure the backend is running.')
+        console.error(err)
+      } finally {
+        setIsUploading(false)
+      }
+    }
+  }
+
+  const handleBatchFileUpload = async (files: FileList) => {
+    setIsUploading(true)
+    setError(null)
+    
+    const newVideos: UploadedVideo[] = []
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('http://localhost:8000/api/video/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`)
+        }
+
+        const data: VideoMetadata = await response.json()
+        newVideos.push({
+          id: data.id,
+          file: file,
+          url: URL.createObjectURL(file)
+        })
+      } catch (err) {
+        console.error(`Error uploading ${file.name}:`, err)
+        setError(`Failed to upload ${file.name}`)
+      }
+    }
+    
+    setUploadedVideos(prev => [...prev, ...newVideos])
+    setIsUploading(false)
+  }
+
+  const removeVideo = (videoId: string) => {
+    setUploadedVideos(prev => {
+      const video = prev.find(v => v.id === videoId)
+      if (video) {
+        URL.revokeObjectURL(video.url)
+      }
+      return prev.filter(v => v.id !== videoId)
+    })
+  }
+
+  const togglePromptSelection = (promptText: string) => {
+    setSelectedPrompts(prev => {
+      const next = new Set(prev)
+      if (next.has(promptText)) {
+        next.delete(promptText)
+      } else {
+        next.add(promptText)
+      }
+      return next
+    })
+  }
+
+  const handleBatchCompare = async () => {
+    if (uploadedVideos.length === 0 || selectedPrompts.size === 0 || selectedModels.size === 0) return
+
+    setIsComparing(true)
+    setError(null)
+    setBatchResult(null)
+    setCompareResult(null)
+
+    const timeoutMinutes = 30 // 30 minutes for batch
+
+    try {
+      // Create an AbortController with extended timeout for batch processing
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMinutes * 60 * 1000)
+
+      const response = await fetch('http://localhost:8000/api/batch-compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_ids: uploadedVideos.map(v => v.id),
+          prompts: Array.from(selectedPrompts),
+          models: Array.from(selectedModels),
+        }),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Batch comparison failed')
+      }
+
+      const data: BatchCompareResponse = await response.json()
+      setBatchResult(data)
+      
+      // Scroll to results
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
     } catch (err) {
-      setError('Failed to upload video. Make sure the backend is running.')
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError(`Request timed out after ${timeoutMinutes} minutes. Try with fewer videos or prompts.`)
+        } else {
+          setError(err.message || 'Batch comparison failed. Check the backend and try again.')
+        }
+      } else {
+        setError('Batch comparison failed. Check the backend and try again.')
+      }
       console.error(err)
     } finally {
-      setIsUploading(false)
+      setIsComparing(false)
     }
   }
 
@@ -199,6 +346,10 @@ export default function Home() {
     setCompareResult(null)
 
     try {
+      // Create an AbortController with a 10-minute timeout for long-running analysis
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000) // 10 minutes
+
       const response = await fetch('http://localhost:8000/api/compare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -207,10 +358,14 @@ export default function Home() {
           prompt: prompt,
           models: Array.from(selectedModels),
         }),
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
+
       if (!response.ok) {
-        throw new Error('Comparison failed')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Comparison failed')
       }
 
       const data: CompareResponse = await response.json()
@@ -221,7 +376,15 @@ export default function Home() {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth' })
       }, 100)
     } catch (err) {
-      setError('Comparison failed. Check the backend and try again.')
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('Request timed out after 10 minutes. Try with a shorter video or simpler prompt.')
+        } else {
+          setError(err.message || 'Comparison failed. Check the backend and try again.')
+        }
+      } else {
+        setError('Comparison failed. Check the backend and try again.')
+      }
       console.error(err)
     } finally {
       setIsComparing(false)
@@ -274,13 +437,31 @@ export default function Home() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-compare-accent to-compare-secondary flex items-center justify-center glow-accent">
             <Brain className="w-6 h-6 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold">
               <span className="gradient-text">Video Understanding</span>
               <span className="text-compare-muted ml-2 text-lg font-normal">Comparisons</span>
             </h1>
             <p className="text-compare-muted text-sm">Compare Gemini models on video analysis tasks</p>
           </div>
+          
+          {/* Batch Mode Toggle */}
+          <button
+            onClick={() => {
+              setIsBatchMode(!isBatchMode)
+              setCompareResult(null)
+              setBatchResult(null)
+              setError(null)
+            }}
+            className={clsx(
+              "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+              isBatchMode
+                ? "bg-compare-accent text-white"
+                : "bg-compare-surface text-compare-text hover:bg-compare-border"
+            )}
+          >
+            {isBatchMode ? 'Single Mode' : 'Batch Mode'}
+          </button>
         </motion.header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -378,6 +559,7 @@ export default function Home() {
                   ref={fileInputRef}
                   onChange={handleFileUpload}
                   accept="video/*"
+                  multiple={isBatchMode}
                   className="hidden"
                 />
                 <button
@@ -398,11 +580,13 @@ export default function Home() {
                   ) : (
                     <>
                       <Upload className="w-5 h-5" />
-                      {videoFile ? 'Change Video' : 'Upload Video'}
+                      {isBatchMode 
+                        ? (uploadedVideos.length > 0 ? 'Add More Videos' : 'Upload Videos') 
+                        : (videoFile ? 'Change Video' : 'Upload Video')}
                     </>
                   )}
                 </button>
-                {videoFile && !isUploading && (
+                {!isBatchMode && videoFile && !isUploading && (
                   <div className="mt-2 flex items-center gap-2 text-sm text-compare-muted">
                     {videoId ? (
                       <CheckCircle2 className="w-4 h-4 text-compare-success" />
@@ -412,6 +596,22 @@ export default function Home() {
                     <span className="truncate">{videoFile.name}</span>
                   </div>
                 )}
+                {isBatchMode && uploadedVideos.length > 0 && (
+                  <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                    {uploadedVideos.map((video) => (
+                      <div key={video.id} className="flex items-center gap-2 text-sm p-2 bg-compare-surface rounded-lg">
+                        <CheckCircle2 className="w-4 h-4 text-compare-success flex-shrink-0" />
+                        <span className="truncate flex-1 text-compare-muted">{video.file.name}</span>
+                        <button
+                          onClick={() => removeVideo(video.id)}
+                          className="p-1 hover:bg-compare-border rounded transition-colors"
+                        >
+                          <X className="w-4 h-4 text-compare-muted" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -419,31 +619,72 @@ export default function Home() {
             <div className="glass rounded-2xl p-6">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-compare-accent" />
-                Understanding Prompt
+                Understanding Prompt{isBatchMode && 's'}
               </h2>
               
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Enter your prompt for video understanding..."
-                className="w-full h-32 bg-compare-surface border border-compare-border rounded-xl px-4 py-3 text-sm placeholder:text-compare-muted focus:outline-none focus:border-compare-accent/50 focus:ring-1 focus:ring-compare-accent/20 transition-all resize-none"
-              />
+              {!isBatchMode ? (
+                <>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Enter your prompt for video understanding..."
+                    className="w-full h-32 bg-compare-surface border border-compare-border rounded-xl px-4 py-3 text-sm placeholder:text-compare-muted focus:outline-none focus:border-compare-accent/50 focus:ring-1 focus:ring-compare-accent/20 transition-all resize-none"
+                  />
 
-              {/* Suggested Prompts */}
-              <div className="mt-4">
-                <p className="text-xs text-compare-muted mb-2 uppercase tracking-wider">Suggestions</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedPrompts.map((suggestion, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPrompt(suggestion)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-compare-surface border border-compare-border hover:border-compare-accent/50 text-compare-muted hover:text-compare-text transition-all"
-                    >
-                      {suggestion.slice(0, 40)}...
-                    </button>
-                  ))}
+                  {/* Suggested Prompts */}
+                  <div className="mt-4">
+                    <p className="text-xs text-compare-muted mb-2 uppercase tracking-wider">Suggestions</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedPrompts.map((suggestion, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setPrompt(suggestion)}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-compare-surface border border-compare-border hover:border-compare-accent/50 text-compare-muted hover:text-compare-text transition-all"
+                        >
+                          {suggestion.slice(0, 40)}...
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <p className="text-sm text-compare-muted mb-3">Select prompts to run on all videos:</p>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {suggestedPrompts.map((suggestion, i) => (
+                      <button
+                        key={i}
+                        onClick={() => togglePromptSelection(suggestion)}
+                        className={clsx(
+                          "w-full text-left text-sm px-4 py-3 rounded-lg border transition-all",
+                          selectedPrompts.has(suggestion)
+                            ? "bg-compare-accent/10 border-compare-accent text-compare-text"
+                            : "bg-compare-surface border-compare-border text-compare-muted hover:border-compare-accent/50 hover:text-compare-text"
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={clsx(
+                            "w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors",
+                            selectedPrompts.has(suggestion)
+                              ? "bg-compare-accent border-compare-accent"
+                              : "border-compare-border"
+                          )}>
+                            {selectedPrompts.has(suggestion) && (
+                              <CheckCircle2 className="w-3 h-3 text-white" />
+                            )}
+                          </div>
+                          <span className="line-clamp-2">{suggestion.slice(0, 120)}...</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedPrompts.size > 0 && (
+                    <p className="text-xs text-compare-muted mt-3">
+                      {selectedPrompts.size} prompt{selectedPrompts.size !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
                 </div>
-              </div>
+              )}
 
               {/* Model Selection */}
               <div className="mt-6">
@@ -494,11 +735,17 @@ export default function Home() {
 
               {/* Compare Button */}
               <button
-                onClick={handleCompare}
-                disabled={!videoId || !prompt.trim() || isComparing || selectedModels.size === 0}
+                onClick={isBatchMode ? handleBatchCompare : handleCompare}
+                disabled={
+                  isBatchMode 
+                    ? (uploadedVideos.length === 0 || selectedPrompts.size === 0 || isComparing || selectedModels.size === 0)
+                    : (!videoId || !prompt.trim() || isComparing || selectedModels.size === 0)
+                }
                 className={clsx(
                   "w-full mt-6 flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-semibold transition-all",
-                  videoId && prompt.trim() && !isComparing && selectedModels.size > 0
+                  (isBatchMode 
+                    ? (uploadedVideos.length > 0 && selectedPrompts.size > 0 && !isComparing && selectedModels.size > 0)
+                    : (videoId && prompt.trim() && !isComparing && selectedModels.size > 0))
                     ? "bg-gradient-to-r from-compare-accent to-compare-secondary text-white glow-accent hover:opacity-90"
                     : "bg-compare-elevated text-compare-muted cursor-not-allowed"
                 )}
@@ -506,12 +753,15 @@ export default function Home() {
                 {isComparing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Running Comparison...
+                    {isBatchMode ? 'Running Batch...' : 'Running Comparison...'}
                   </>
                 ) : (
                   <>
                     <Zap className="w-5 h-5" />
-                    Compare {selectedModels.size} Model{selectedModels.size !== 1 ? 's' : ''}
+                    {isBatchMode 
+                      ? `Run ${uploadedVideos.length} × ${selectedPrompts.size} = ${uploadedVideos.length * selectedPrompts.size} Comparisons`
+                      : `Compare ${selectedModels.size} Model${selectedModels.size !== 1 ? 's' : ''}`
+                    }
                   </>
                 )}
               </button>
@@ -538,14 +788,19 @@ export default function Home() {
                 </div>
               )}
 
-              {!compareResult && !isComparing && (
+              {!compareResult && !batchResult && !isComparing && (
                 <div className="h-[500px] flex items-center justify-center text-center">
                   <div>
                     <div className="w-16 h-16 mx-auto rounded-2xl bg-compare-elevated border border-compare-border flex items-center justify-center mb-4">
                       <Zap className="w-8 h-8 text-compare-muted" />
                     </div>
                     <p className="text-compare-text font-medium mb-1">No results yet</p>
-                    <p className="text-compare-muted text-sm">Upload a video and enter a prompt to compare models</p>
+                    <p className="text-compare-muted text-sm">
+                      {isBatchMode 
+                        ? 'Upload videos and select prompts to run batch comparison'
+                        : 'Upload a video and enter a prompt to compare models'
+                      }
+                    </p>
                   </div>
                 </div>
               )}
@@ -554,12 +809,97 @@ export default function Home() {
                 <div className="h-[500px] flex items-center justify-center">
                   <div className="text-center">
                     <Loader2 className="w-12 h-12 text-compare-accent animate-spin mx-auto mb-4" />
-                    <p className="text-compare-text font-medium mb-1">Analyzing with all models...</p>
-                    <p className="text-compare-muted text-sm">This may take a minute</p>
+                    <p className="text-compare-text font-medium mb-1">
+                      {isBatchMode ? 'Running batch analysis...' : 'Analyzing with all models...'}
+                    </p>
+                    <p className="text-compare-muted text-sm">This may take a few minutes</p>
                   </div>
                 </div>
               )}
 
+              {/* Batch Results */}
+              {batchResult && (
+                <div className="space-y-6">
+                  {/* Batch Summary */}
+                  <div className="p-4 rounded-xl bg-compare-secondary/10 border border-compare-secondary/20">
+                    <h3 className="font-semibold text-compare-secondary mb-2">Batch Summary</h3>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-compare-muted">Videos</p>
+                        <p className="text-compare-text font-semibold">{batchResult.total_videos}</p>
+                      </div>
+                      <div>
+                        <p className="text-compare-muted">Prompts</p>
+                        <p className="text-compare-text font-semibold">{batchResult.total_prompts}</p>
+                      </div>
+                      <div>
+                        <p className="text-compare-muted">Total Comparisons</p>
+                        <p className="text-compare-text font-semibold">{batchResult.total_combinations}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Individual Comparisons */}
+                  {batchResult.comparisons.map((comparison, index) => (
+                    <div key={index} className="p-4 rounded-xl bg-compare-surface border border-compare-border">
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Video className="w-4 h-4 text-compare-accent" />
+                          <h4 className="font-semibold text-compare-text">Video {index + 1}</h4>
+                          <span className="text-xs text-compare-muted">({comparison.video_id})</span>
+                        </div>
+                        <p className="text-sm text-compare-muted line-clamp-2">{comparison.prompt}</p>
+                      </div>
+
+                      {comparison.overall_summary && (
+                        <div className="mb-4 p-3 rounded-lg bg-compare-secondary/10 border border-compare-secondary/20">
+                          <p className="text-xs text-compare-secondary font-semibold mb-1">Summary</p>
+                          <p className="text-xs text-compare-text">{comparison.overall_summary}</p>
+                        </div>
+                      )}
+
+                      {/* Model Results Grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {comparison.results.map((result) => {
+                          const evaluation = comparison.evaluation?.find(e => e.model_name === result.model_name)
+                          return (
+                            <div key={result.model_name} className="p-3 rounded-lg bg-compare-elevated border border-compare-border">
+                              <div className="flex items-center justify-between mb-2">
+                                <h5 className="font-semibold text-sm text-compare-text">{result.model_name}</h5>
+                                {evaluation && (
+                                  <div className={clsx(
+                                    "px-2 py-0.5 rounded-full text-xs font-bold",
+                                    getScoreColor(evaluation.score)
+                                  )}>
+                                    {evaluation.score}/10
+                                  </div>
+                                )}
+                              </div>
+                              {result.error ? (
+                                <p className="text-xs text-compare-error">{result.error}</p>
+                              ) : (
+                                <>
+                                  <p className="text-xs text-compare-muted line-clamp-3 mb-2">{result.response}</p>
+                                  {evaluation && (
+                                    <div className="text-xs">
+                                      <p className="text-compare-success">✓ {evaluation.strengths[0]}</p>
+                                      {evaluation.weaknesses[0] && (
+                                        <p className="text-compare-warning">! {evaluation.weaknesses[0]}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Single Comparison Result */}
               {compareResult && (
                 <div className="space-y-4">
                   {/* Overall Summary */}

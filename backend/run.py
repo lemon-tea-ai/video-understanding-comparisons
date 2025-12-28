@@ -7,7 +7,7 @@ import uvicorn
 from app.config import settings
 
 if __name__ == "__main__":
-    # Configure uvicorn with settings optimized for large video uploads
+    # Configure uvicorn with settings optimized for large video uploads and long-running analysis
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
@@ -17,8 +17,10 @@ if __name__ == "__main__":
         # CRITICAL: Set maximum request body size to match our app config (500MB)
         limit_max_requests=settings.max_file_size,
         
-        # Optional: Increase timeout for large uploads
-        timeout_keep_alive=120,  # Keep connection alive for 2 minutes
+        # CRITICAL: Increase timeout for long-running video analysis
+        # Note: For very long requests, the timeout is primarily controlled by the client
+        # and the individual API call timeouts (Gemini SDK has its own timeout handling)
+        timeout_keep_alive=120,  # Keep connection alive for 2 minutes between requests
         
         # Optional: Configure logging
         log_level="info",

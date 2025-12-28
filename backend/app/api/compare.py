@@ -40,6 +40,12 @@ class CompareRequest(BaseModel):
     models: Optional[list[str]] = None  # If None, use all models
 
 
+class BatchCompareRequest(BaseModel):
+    video_ids: list[str]  # Multiple videos
+    prompts: list[str]  # Multiple prompts
+    models: Optional[list[str]] = None  # If None, use all models
+
+
 class ModelResult(BaseModel):
     model_name: str
     model_id: str
@@ -64,6 +70,13 @@ class CompareResponse(BaseModel):
     overall_summary: Optional[str] = None
 
 
+class BatchCompareResponse(BaseModel):
+    comparisons: list[CompareResponse]
+    total_videos: int
+    total_prompts: int
+    total_combinations: int
+
+
 async def run_model_on_video(
     client: genai.Client,
     model_name: str,
@@ -77,9 +90,13 @@ async def run_model_on_video(
     start_time = time.time()
     
     try:
+        print(f"[{model_name}] Starting video analysis...")
+        
         # Upload the video file
         with open(video_path, "rb") as f:
             video_bytes = f.read()
+        
+        print(f"[{model_name}] Video loaded ({len(video_bytes) / 1024 / 1024:.1f} MB)")
         
         # Determine mime type from extension
         ext = os.path.splitext(video_path)[1].lower()
@@ -98,7 +115,11 @@ async def run_model_on_video(
             mime_type=mime_type
         )
         
+        print(f"[{model_name}] Sending request to Gemini API...")
+        
         # Generate response
+        # Note: Google Generative AI SDK handles timeouts internally
+        # Default timeout is typically 600 seconds (10 minutes) for long operations
         response = client.models.generate_content(
             model=model_id,
             contents=[
@@ -108,6 +129,7 @@ async def run_model_on_video(
         )
         
         latency_ms = (time.time() - start_time) * 1000
+        print(f"[{model_name}] Completed in {latency_ms/1000:.1f}s")
         
         return ModelResult(
             model_name=model_name,
@@ -118,6 +140,7 @@ async def run_model_on_video(
         
     except Exception as e:
         latency_ms = (time.time() - start_time) * 1000
+        print(f"[{model_name}] Error after {latency_ms/1000:.1f}s: {str(e)}")
         return ModelResult(
             model_name=model_name,
             model_id=model_id,
@@ -132,7 +155,11 @@ async def evaluate_results(
     prompt: str,
     results: list[ModelResult]
 ) -> tuple[list[EvaluationScore], str]:
-    """Use Gemini 2.0 Pro to evaluate all model results."""
+    """Use Gemini 3 Pro Preview to evaluate all model results."""
+    import time
+    
+    start_time = time.time()
+    print("[EVALUATION] Starting model evaluation...")
     
     # Build the evaluation prompt
     eval_prompt = f"""You are an expert evaluator of AI video understanding capabilities.
@@ -179,10 +206,14 @@ Provide your evaluation in the following JSON format:
 Respond ONLY with the JSON, no additional text."""
 
     try:
+        print("[EVALUATION] Sending evaluation request to Gemini API...")
         response = client.models.generate_content(
             model="gemini-3-pro-preview",
             contents=[eval_prompt]
         )
+        
+        elapsed = time.time() - start_time
+        print(f"[EVALUATION] Completed in {elapsed:.1f}s")
         
         # Parse the JSON response
         response_text = response.text.strip()
@@ -210,6 +241,8 @@ Respond ONLY with the JSON, no additional text."""
     except Exception as e:
         # Return empty evaluation on error
         import traceback
+        elapsed = time.time() - start_time
+        print(f"[EVALUATION] Error after {elapsed:.1f}s: {e}")
         print(f"[DEBUG] Evaluation error: {e}")
         print(f"[DEBUG] Full traceback:\n{traceback.format_exc()}")
         print(f"[DEBUG] API key being used: {settings.gemini_api_key[:10]}...{settings.gemini_api_key[-4:] if settings.gemini_api_key else 'EMPTY'}")
@@ -231,16 +264,27 @@ async def compare_video_understanding(request: CompareRequest):
     2. Evaluates all results using Gemini 3 Pro
     3. Returns results with scores and reasoning
     """
+    import time
+    overall_start = time.time()
+    
+    print(f"\n{'='*60}")
+    print(f"[COMPARE] Starting comparison for video: {request.video_id}")
+    print(f"[COMPARE] Prompt length: {len(request.prompt)} characters")
+    print(f"{'='*60}\n")
     
     # Validate video exists
     video_path = get_video_path(request.video_id)
     if not video_path or not os.path.exists(video_path):
         raise HTTPException(status_code=404, detail="Video not found")
     
+    video_size_mb = os.path.getsize(video_path) / 1024 / 1024
+    print(f"[COMPARE] Video size: {video_size_mb:.1f} MB")
+    
     client = get_client()
     
     # Determine which models to run
     selected_models = request.models if request.models else list(MODELS.keys())
+    print(f"[COMPARE] Running {len(selected_models)} models: {', '.join(selected_models)}")
     
     # Validate selected models
     for model in selected_models:
@@ -251,15 +295,23 @@ async def compare_video_understanding(request: CompareRequest):
             )
     
     # Run selected models in parallel
+    print(f"[COMPARE] Starting parallel model execution...")
     tasks = [
         run_model_on_video(client, name, MODELS[name], video_path, request.prompt)
         for name in selected_models
     ]
     
     results = await asyncio.gather(*tasks)
+    models_elapsed = time.time() - overall_start
+    print(f"[COMPARE] All models completed in {models_elapsed:.1f}s")
     
-    # Evaluate results using Gemini 2.0 Pro
+    # Evaluate results using Gemini 3 Pro Preview
     evaluations, summary = await evaluate_results(client, request.prompt, list(results))
+    
+    total_elapsed = time.time() - overall_start
+    print(f"\n{'='*60}")
+    print(f"[COMPARE] Total comparison completed in {total_elapsed:.1f}s")
+    print(f"{'='*60}\n")
     
     return CompareResponse(
         video_id=request.video_id,
@@ -267,5 +319,95 @@ async def compare_video_understanding(request: CompareRequest):
         results=list(results),
         evaluation=evaluations if evaluations else None,
         overall_summary=summary if summary else None
+    )
+
+
+@router.post("/batch-compare", response_model=BatchCompareResponse)
+async def batch_compare_video_understanding(request: BatchCompareRequest):
+    """
+    Batch compare: Run multiple videos with multiple prompts.
+    
+    Creates a comparison for each video-prompt combination.
+    For example: 2 videos × 3 prompts = 6 comparisons
+    
+    Processes combinations sequentially to avoid overwhelming the API.
+    """
+    import time
+    overall_start = time.time()
+    
+    print(f"\n{'='*60}")
+    print(f"[BATCH] Starting batch comparison")
+    print(f"[BATCH] Videos: {len(request.video_ids)}")
+    print(f"[BATCH] Prompts: {len(request.prompts)}")
+    print(f"[BATCH] Total combinations: {len(request.video_ids) * len(request.prompts)}")
+    print(f"{'='*60}\n")
+    
+    # Validate all videos exist
+    for video_id in request.video_ids:
+        video_path = get_video_path(video_id)
+        if not video_path or not os.path.exists(video_path):
+            raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
+    
+    client = get_client()
+    selected_models = request.models if request.models else list(MODELS.keys())
+    
+    # Validate selected models
+    for model in selected_models:
+        if model not in MODELS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown model: {model}. Available: {list(MODELS.keys())}"
+            )
+    
+    comparisons = []
+    total_combinations = len(request.video_ids) * len(request.prompts)
+    current_combo = 0
+    
+    # Process each video-prompt combination
+    for video_id in request.video_ids:
+        video_path = get_video_path(video_id)
+        video_size_mb = os.path.getsize(video_path) / 1024 / 1024
+        
+        for prompt in request.prompts:
+            current_combo += 1
+            print(f"\n[BATCH] Processing combination {current_combo}/{total_combinations}")
+            print(f"[BATCH] Video: {video_id} ({video_size_mb:.1f} MB)")
+            print(f"[BATCH] Prompt: {prompt[:80]}{'...' if len(prompt) > 80 else ''}")
+            
+            combo_start = time.time()
+            
+            # Run selected models in parallel for this combination
+            tasks = [
+                run_model_on_video(client, name, MODELS[name], video_path, prompt)
+                for name in selected_models
+            ]
+            
+            results = await asyncio.gather(*tasks)
+            
+            # Evaluate results
+            evaluations, summary = await evaluate_results(client, prompt, list(results))
+            
+            combo_elapsed = time.time() - combo_start
+            print(f"[BATCH] Combination completed in {combo_elapsed:.1f}s")
+            
+            comparisons.append(CompareResponse(
+                video_id=video_id,
+                prompt=prompt,
+                results=list(results),
+                evaluation=evaluations if evaluations else None,
+                overall_summary=summary if summary else None
+            ))
+    
+    total_elapsed = time.time() - overall_start
+    print(f"\n{'='*60}")
+    print(f"[BATCH] All {total_combinations} combinations completed in {total_elapsed:.1f}s")
+    print(f"[BATCH] Average per combination: {total_elapsed/total_combinations:.1f}s")
+    print(f"{'='*60}\n")
+    
+    return BatchCompareResponse(
+        comparisons=comparisons,
+        total_videos=len(request.video_ids),
+        total_prompts=len(request.prompts),
+        total_combinations=total_combinations
     )
 

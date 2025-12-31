@@ -59,6 +59,26 @@ interface BatchCompareResponse {
   total_combinations: number
 }
 
+interface JobResponse {
+  job_id: string
+  status: string
+  message: string
+}
+
+interface Job {
+  job_id: string
+  job_type: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  progress: number
+  progress_message: string | null
+  request_data: any
+  result: any
+  error: string | null
+}
+
 interface UploadedVideo {
   id: string
   file: File
@@ -108,10 +128,16 @@ export default function Home() {
     new Set(AVAILABLE_MODELS.map(m => m.id))
   )
   
+  // Job polling state
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [jobProgress, setJobProgress] = useState<number>(0)
+  const [jobProgressMessage, setJobProgressMessage] = useState<string | null>(null)
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const togglePlayPause = () => {
     if (videoRef.current) {
@@ -263,6 +289,97 @@ export default function Home() {
     })
   }
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      // Add timestamp to prevent caching
+      const timestamp = Date.now()
+      const response = await fetch(`http://localhost:8000/api/jobs/${jobId}?_t=${timestamp}`, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch job status')
+      }
+
+      const job: Job = await response.json()
+      
+      console.log('[POLL] Job status:', {
+        status: job.status,
+        progress: job.progress,
+        message: job.progress_message,
+        fullJob: job
+      })
+      
+      setJobProgress(job.progress)
+      setJobProgressMessage(job.progress_message)
+
+      if (job.status === 'completed') {
+        // Stop polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        
+        setIsComparing(false)
+        setCurrentJobId(null)
+        
+        // Get the result
+        if (job.result) {
+          if (job.job_type === 'single_compare') {
+            setCompareResult(job.result as CompareResponse)
+          } else if (job.job_type === 'batch_compare') {
+            setBatchResult(job.result as BatchCompareResponse)
+          }
+          
+          // Scroll to results
+          setTimeout(() => {
+            resultsRef.current?.scrollIntoView({ behavior: 'smooth' })
+          }, 100)
+        }
+      } else if (job.status === 'failed') {
+        // Stop polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        
+        setIsComparing(false)
+        setCurrentJobId(null)
+        setError(job.error || 'Job failed')
+      }
+    } catch (err) {
+      console.error('Error polling job status:', err)
+      // Don't stop polling on network errors - the job might still be running
+    }
+  }
+
+  const startJobPolling = (jobId: string) => {
+    setCurrentJobId(jobId)
+    setJobProgress(0)
+    setJobProgressMessage('Starting...')
+    
+    // Poll immediately
+    pollJobStatus(jobId)
+    
+    // Then poll every 2 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      pollJobStatus(jobId)
+    }, 2000)
+  }
+
   const handleBatchCompare = async () => {
     if (uploadedVideos.length === 0 || selectedPrompts.size === 0 || selectedModels.size === 0) return
 
@@ -271,14 +388,9 @@ export default function Home() {
     setBatchResult(null)
     setCompareResult(null)
 
-    const timeoutMinutes = 30 // 30 minutes for batch
-
     try {
-      // Create an AbortController with extended timeout for batch processing
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMinutes * 60 * 1000)
-
-      const response = await fetch('http://localhost:8000/api/batch-compare', {
+      // Use async endpoint that returns immediately with a job ID
+      const response = await fetch('http://localhost:8000/api/batch-compare-async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -286,35 +398,25 @@ export default function Home() {
           prompts: Array.from(selectedPrompts),
           models: Array.from(selectedModels),
         }),
-        signal: controller.signal,
       })
-
-      clearTimeout(timeoutId)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Batch comparison failed')
+        throw new Error(errorData.detail || 'Failed to start batch comparison')
       }
 
-      const data: BatchCompareResponse = await response.json()
-      setBatchResult(data)
+      const jobResponse: JobResponse = await response.json()
       
-      // Scroll to results
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
+      // Start polling for job status
+      startJobPolling(jobResponse.job_id)
+      
     } catch (err) {
       if (err instanceof Error) {
-        if (err.name === 'AbortError') {
-          setError(`Request timed out after ${timeoutMinutes} minutes. Try with fewer videos or prompts.`)
-        } else {
-          setError(err.message || 'Batch comparison failed. Check the backend and try again.')
-        }
+        setError(err.message || 'Batch comparison failed. Check the backend and try again.')
       } else {
         setError('Batch comparison failed. Check the backend and try again.')
       }
       console.error(err)
-    } finally {
       setIsComparing(false)
     }
   }
@@ -346,11 +448,8 @@ export default function Home() {
     setCompareResult(null)
 
     try {
-      // Create an AbortController with a 10-minute timeout for long-running analysis
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000) // 10 minutes
-
-      const response = await fetch('http://localhost:8000/api/compare', {
+      // Use async endpoint that returns immediately with a job ID
+      const response = await fetch('http://localhost:8000/api/compare-async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -358,35 +457,25 @@ export default function Home() {
           prompt: prompt,
           models: Array.from(selectedModels),
         }),
-        signal: controller.signal,
       })
-
-      clearTimeout(timeoutId)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Comparison failed')
+        throw new Error(errorData.detail || 'Failed to start comparison')
       }
 
-      const data: CompareResponse = await response.json()
-      setCompareResult(data)
+      const jobResponse: JobResponse = await response.json()
       
-      // Scroll to results
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
+      // Start polling for job status
+      startJobPolling(jobResponse.job_id)
+      
     } catch (err) {
       if (err instanceof Error) {
-        if (err.name === 'AbortError') {
-          setError('Request timed out after 10 minutes. Try with a shorter video or simpler prompt.')
-        } else {
-          setError(err.message || 'Comparison failed. Check the backend and try again.')
-        }
+        setError(err.message || 'Comparison failed. Check the backend and try again.')
       } else {
         setError('Comparison failed. Check the backend and try again.')
       }
       console.error(err)
-    } finally {
       setIsComparing(false)
     }
   }
@@ -807,12 +896,29 @@ export default function Home() {
 
               {isComparing && (
                 <div className="h-[500px] flex items-center justify-center">
-                  <div className="text-center">
+                  <div className="text-center max-w-md">
                     <Loader2 className="w-12 h-12 text-compare-accent animate-spin mx-auto mb-4" />
                     <p className="text-compare-text font-medium mb-1">
                       {isBatchMode ? 'Running batch analysis...' : 'Analyzing with all models...'}
                     </p>
-                    <p className="text-compare-muted text-sm">This may take a few minutes</p>
+                    
+                    {/* Progress bar */}
+                    <div className="w-full bg-compare-surface rounded-full h-2 mb-2 overflow-hidden">
+                      <div 
+                        className="h-full bg-compare-accent transition-all duration-300 rounded-full"
+                        style={{ width: `${jobProgress}%` }}
+                      />
+                    </div>
+                    
+                    <p className="text-compare-muted text-sm mb-2">{jobProgress}% complete</p>
+                    
+                    {jobProgressMessage && (
+                      <p className="text-compare-muted text-xs">{jobProgressMessage}</p>
+                    )}
+                    
+                    <p className="text-compare-muted text-xs mt-4">
+                      💡 This task runs in the background - you can safely lock your screen
+                    </p>
                   </div>
                 </div>
               )}
@@ -865,7 +971,15 @@ export default function Home() {
                           return (
                             <div key={result.model_name} className="p-3 rounded-lg bg-compare-elevated border border-compare-border">
                               <div className="flex items-center justify-between mb-2">
-                                <h5 className="font-semibold text-sm text-compare-text">{result.model_name}</h5>
+                                <div className="flex-1">
+                                  <h5 className="font-semibold text-sm text-compare-text">{result.model_name}</h5>
+                                  {result.latency_ms && (
+                                    <div className="flex items-center gap-1 text-xs text-compare-muted mt-0.5">
+                                      <Clock className="w-3 h-3" />
+                                      {(result.latency_ms / 1000).toFixed(2)}s
+                                    </div>
+                                  )}
+                                </div>
                                 {evaluation && (
                                   <div className={clsx(
                                     "px-2 py-0.5 rounded-full text-xs font-bold",

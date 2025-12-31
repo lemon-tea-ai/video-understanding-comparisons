@@ -106,10 +106,7 @@
 
 /* Grid background pattern */
 .grid-bg {
-  background-image: 
-    linear-gradient(rgba(42, 52, 65, 0.3) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(42, 52, 65, 0.3) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background: #000000;
 }
 
 /* Gradient orbs */

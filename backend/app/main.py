@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import video, compare
+from app.api import video, compare, jobs
 from app.config import settings
 
 app = FastAPI(
@@ -25,6 +25,7 @@ app.add_middleware(
 # Include routers
 app.include_router(video.router, prefix="/api", tags=["video"])
 app.include_router(compare.router, prefix="/api", tags=["compare"])
+app.include_router(jobs.router, prefix="/api", tags=["jobs"])
 
 
 @app.get("/")

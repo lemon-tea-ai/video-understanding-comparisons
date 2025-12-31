@@ -2,6 +2,19 @@
 
 Compare video understanding capabilities across different Gemini models. Upload videos, enter prompts, and see how Gemini 3 Pro Preview, 3 Flash Preview, 2.5 Pro, and 2.5 Flash each interpret the video content.
 
+## 🎉 New: Background Job System
+
+**Long-running comparisons now work even when your screen locks!** 
+
+The app now uses a background job queue system that:
+- ✅ Continues processing videos even if your MacBook sleeps
+- ✅ Shows real-time progress updates (0-100%)
+- ✅ Never times out on long videos or batch operations
+- ✅ Persists jobs to disk (survives app restarts)
+- ✅ Allows checking job status at any time
+
+**👉 See [BACKGROUND_JOBS.md](./BACKGROUND_JOBS.md) for detailed documentation.**
+
 ## Features
 
 - **Single & Batch Mode**: Analyze one video or run bulk comparisons across multiple videos and prompts
